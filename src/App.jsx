@@ -42,9 +42,9 @@ export default function App() {
   const [project, setProject] = useState(defaultTemplate);
   const [savedProjects, setSavedProjects] = useState([]);
   const [isExporting, setIsExporting] = useState(false);
+  const [activeTab, setActiveTab] = useState('editor'); // 'editor' or 'preview' for mobile toggle
   const previewRef = useRef(null);
 
-  // Load saved projects on mount
   useEffect(() => {
     const loaded = localStorage.getItem('ktvMenuProjects');
     if (loaded) {
@@ -57,12 +57,10 @@ export default function App() {
     document.head.appendChild(script);
   }, []);
 
-  // Handler for text input changes
   const handleChange = (field, value) => {
     setProject(prev => ({ ...prev, [field]: value }));
   };
 
-  // Handler for nested package changes
   const handlePackageChange = (packageIndex, field, value, rowIndex = null) => {
     setProject(prev => {
       const newPackages = [...prev.packages];
@@ -75,7 +73,6 @@ export default function App() {
     });
   };
 
-  // Handler for additional rows changes
   const handleAdditionalChange = (rowIndex, field, value) => {
     setProject(prev => {
       const newAdditional = [...prev.additionalRows];
@@ -115,7 +112,6 @@ export default function App() {
     reader.readAsDataURL(file);
   };
 
-  // Handle Image Upload and Compress to Base64
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -147,7 +143,6 @@ export default function App() {
     reader.readAsDataURL(file);
   };
 
-  // Save project to local storage
   const saveProject = () => {
     const newProject = { ...project, id: project.id || Date.now().toString() };
     const existingIndex = savedProjects.findIndex(p => p.id === newProject.id);
@@ -166,7 +161,6 @@ export default function App() {
     setProject(newProject);
   };
 
-  // Load a project
   const loadProject = (id) => {
     const target = savedProjects.find(p => p.id === id);
     if (target) {
@@ -174,12 +168,10 @@ export default function App() {
     }
   };
 
-  // Create new project
   const newProject = () => {
     setProject({ ...defaultTemplate, id: Date.now().toString(), projectName: 'Proyek Baru', image: null });
   };
 
-  // Export to PNG
   const exportPNG = async () => {
     if (!window.html2canvas) {
       alert('Library export sedang dimuat, coba lagi dalam beberapa detik.');
@@ -205,7 +197,6 @@ export default function App() {
     setIsExporting(false);
   };
 
-  // Export to PDF (Uses print dialog)
   const exportPDF = () => {
     window.print();
   };
@@ -213,8 +204,24 @@ export default function App() {
   return (
     <div className="flex flex-col md:flex-row h-screen bg-gray-100 text-gray-800 font-sans overflow-hidden">
       
+      {/* MOBILE TAB TOGGLE HEADER */}
+      <div className="md:hidden flex bg-gray-900 text-white shrink-0 shadow-md z-30">
+        <button 
+          onClick={() => setActiveTab('editor')} 
+          className={`flex-1 py-3 text-center text-sm font-semibold transition ${activeTab === 'editor' ? 'bg-yellow-600 text-white' : 'bg-gray-800 text-gray-300'}`}
+        >
+          ✏️ Editor Menu
+        </button>
+        <button 
+          onClick={() => setActiveTab('preview')} 
+          className={`flex-1 py-3 text-center text-sm font-semibold transition ${activeTab === 'preview' ? 'bg-yellow-600 text-white' : 'bg-gray-800 text-gray-300'}`}
+        >
+          👁️ Lihat Hasil Poster
+        </button>
+      </div>
+
       {/* SIDEBAR EDITOR */}
-      <div className="w-full md:w-[380px] lg:w-[420px] bg-white border-r border-gray-200 flex flex-col h-full overflow-y-auto print:hidden shadow-lg z-10 shrink-0">
+      <div className={`w-full md:w-[380px] lg:w-[420px] bg-white border-r border-gray-200 flex flex-col h-full overflow-y-auto print:hidden shadow-lg z-10 shrink-0 ${activeTab === 'preview' ? 'hidden md:flex' : 'flex'}`}>
         <div className="p-4 bg-gray-900 text-white sticky top-0 z-20 shadow-md">
           <h1 className="text-xl font-bold text-yellow-500 mb-2">Menu Editor</h1>
           <div className="flex gap-2">
@@ -238,7 +245,7 @@ export default function App() {
           )}
         </div>
 
-        <div className="p-4 space-y-6">
+        <div className="p-4 space-y-6 pb-20 md:pb-6">
           {/* General Settings */}
           <section className="space-y-3">
             <h2 className="font-semibold text-gray-700 border-b pb-1">Pengaturan Umum</h2>
@@ -273,25 +280,25 @@ export default function App() {
               <div key={pkg.id} className="bg-gray-50 p-3 rounded border shadow-sm space-y-2">
                 <input type="text" value={pkg.title} onChange={(e) => handlePackageChange(pIndex, 'title', e.target.value)} className="w-full border rounded p-2 font-bold text-sm bg-white" placeholder="Judul Paket (Misal: 4 LADIES)" />
                 
-                {/* Fixed layout for hours input columns */}
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="block text-[10px] text-gray-400 mb-0.5">Jam Kolom 1</label>
+                {/* Fixed layout for hours input columns with proper grid constraints */}
+                <div className="grid grid-cols-2 gap-2 w-full">
+                  <div className="min-w-0">
+                    <label className="block text-[10px] text-gray-400 mb-0.5 truncate">Jam Kolom 1</label>
                     <input type="text" value={pkg.col1Title} onChange={(e) => handlePackageChange(pIndex, 'col1Title', e.target.value)} className="w-full border rounded p-1.5 text-xs text-center bg-white" placeholder="5 HOURS" />
                   </div>
-                  <div>
-                    <label className="block text-[10px] text-gray-400 mb-0.5">Jam Kolom 2</label>
+                  <div className="min-w-0">
+                    <label className="block text-[10px] text-gray-400 mb-0.5 truncate">Jam Kolom 2</label>
                     <input type="text" value={pkg.col2Title} onChange={(e) => handlePackageChange(pIndex, 'col2Title', e.target.value)} className="w-full border rounded p-1.5 text-xs text-center bg-white" placeholder="3 HOURS" />
                   </div>
                 </div>
                 
                 {pkg.rows.map((row, rIndex) => (
                   <div key={row.id} className="grid grid-cols-2 gap-2 border-t pt-2 mt-2 border-gray-200">
-                    <div className="space-y-1 bg-white p-2 rounded border border-gray-100">
+                    <div className="space-y-1 bg-white p-2 rounded border border-gray-100 min-w-0">
                       <input type="text" value={row.label1} onChange={(e) => handlePackageChange(pIndex, 'label1', e.target.value, rIndex)} className="w-full border rounded p-1 text-xs text-center" placeholder="1 BOTTLE" />
                       <input type="text" value={row.price1} onChange={(e) => handlePackageChange(pIndex, 'price1', e.target.value, rIndex)} className="w-full border rounded p-1 text-xs text-center font-bold text-yellow-600" placeholder="3400K" />
                     </div>
-                    <div className="space-y-1 bg-white p-2 rounded border border-gray-100">
+                    <div className="space-y-1 bg-white p-2 rounded border border-gray-100 min-w-0">
                       <input type="text" value={row.label2} onChange={(e) => handlePackageChange(pIndex, 'label2', e.target.value, rIndex)} className="w-full border rounded p-1 text-xs text-center" placeholder="1 BOTTLE" />
                       <input type="text" value={row.price2} onChange={(e) => handlePackageChange(pIndex, 'price2', e.target.value, rIndex)} className="w-full border rounded p-1 text-xs text-center font-bold text-yellow-600" placeholder="2900K" />
                     </div>
@@ -313,9 +320,9 @@ export default function App() {
               <input type="text" value={project.additionalTitle} onChange={(e) => handleChange('additionalTitle', e.target.value)} className="w-full border rounded p-2 text-sm font-bold" placeholder="Judul Additional" />
               {project.additionalRows.map((row, rIndex) => (
                 <div key={row.id} className="grid grid-cols-3 gap-1 border-t pt-2">
-                  <input type="text" value={row.label} onChange={(e) => handleAdditionalChange(rIndex, 'label', e.target.value)} className="border rounded p-1 text-xs text-center" />
-                  <input type="text" value={row.item1} onChange={(e) => handleAdditionalChange(rIndex, 'item1', e.target.value)} className="border rounded p-1 text-xs text-center" />
-                  <input type="text" value={row.item2} onChange={(e) => handleAdditionalChange(rIndex, 'item2', e.target.value)} className="border rounded p-1 text-xs text-center" />
+                  <input type="text" value={row.label} onChange={(e) => handleAdditionalChange(rIndex, 'label', e.target.value)} className="border rounded p-1 text-xs text-center min-w-0" />
+                  <input type="text" value={row.item1} onChange={(e) => handleAdditionalChange(rIndex, 'item1', e.target.value)} className="border rounded p-1 text-xs text-center min-w-0" />
+                  <input type="text" value={row.item2} onChange={(e) => handleAdditionalChange(rIndex, 'item2', e.target.value)} className="border rounded p-1 text-xs text-center min-w-0" />
                 </div>
               ))}
             </div>
@@ -324,16 +331,16 @@ export default function App() {
       </div>
 
       {/* PREVIEW & EXPORT AREA */}
-      <div className="flex-1 flex flex-col bg-gray-200 overflow-hidden">
+      <div className={`flex-1 flex-col bg-gray-200 overflow-hidden ${activeTab === 'preview' ? 'flex' : 'hidden md:flex'}`}>
         
         {/* Topbar Actions */}
         <div className="bg-white p-3 border-b flex justify-between items-center print:hidden shadow-sm z-10 shrink-0">
-          <span className="text-gray-600 text-sm hidden md:inline">Gunakan editor di sebelah kiri untuk mengubah tampilan.</span>
-          <div className="flex gap-3 ml-auto">
-            <button onClick={exportPNG} disabled={isExporting} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded shadow-sm text-sm font-medium transition flex items-center gap-2">
+          <span className="text-gray-600 text-sm hidden md:inline">Hasil poster siap diunduh atau disimpan.</span>
+          <div className="flex gap-2 ml-auto w-full md:w-auto justify-end">
+            <button onClick={exportPNG} disabled={isExporting} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded shadow-sm text-xs md:text-sm font-medium transition flex items-center gap-2">
               {isExporting ? 'Memproses...' : 'Unduh PNG'}
             </button>
-            <button onClick={exportPDF} className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded shadow-sm text-sm font-medium transition flex items-center gap-2">
+            <button onClick={exportPDF} className="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded shadow-sm text-xs md:text-sm font-medium transition flex items-center gap-2">
               Simpan PDF
             </button>
           </div>
