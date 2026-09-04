@@ -214,18 +214,18 @@ export default function App() {
     <div className="flex flex-col md:flex-row h-screen bg-gray-100 text-gray-800 font-sans overflow-hidden">
       
       {/* SIDEBAR EDITOR */}
-      <div className="w-full md:w-1/3 lg:w-1/4 bg-white border-r border-gray-200 flex flex-col h-full overflow-y-auto print:hidden shadow-lg z-10">
+      <div className="w-full md:w-[380px] lg:w-[420px] bg-white border-r border-gray-200 flex flex-col h-full overflow-y-auto print:hidden shadow-lg z-10 shrink-0">
         <div className="p-4 bg-gray-900 text-white sticky top-0 z-20 shadow-md">
           <h1 className="text-xl font-bold text-yellow-500 mb-2">Menu Editor</h1>
           <div className="flex gap-2">
-            <button onClick={newProject} className="flex-1 bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded text-sm transition">Baru</button>
-            <button onClick={saveProject} className="flex-1 bg-yellow-600 hover:bg-yellow-500 text-white px-2 py-1 rounded text-sm transition">Simpan</button>
+            <button onClick={newProject} className="flex-1 bg-gray-700 hover:bg-gray-600 px-2 py-1.5 rounded text-sm transition">Baru</button>
+            <button onClick={saveProject} className="flex-1 bg-yellow-600 hover:bg-yellow-500 text-white px-2 py-1.5 rounded text-sm transition">Simpan</button>
           </div>
           
           {savedProjects.length > 0 && (
             <div className="mt-3">
               <select 
-                className="w-full bg-gray-800 border border-gray-600 rounded p-1 text-sm text-white"
+                className="w-full bg-gray-800 border border-gray-600 rounded p-1.5 text-sm text-white"
                 onChange={(e) => loadProject(e.target.value)}
                 value={project.id}
               >
@@ -272,19 +272,26 @@ export default function App() {
             {project.packages.map((pkg, pIndex) => (
               <div key={pkg.id} className="bg-gray-50 p-3 rounded border shadow-sm space-y-2">
                 <input type="text" value={pkg.title} onChange={(e) => handlePackageChange(pIndex, 'title', e.target.value)} className="w-full border rounded p-2 font-bold text-sm bg-white" placeholder="Judul Paket (Misal: 4 LADIES)" />
-                <div className="flex gap-2">
-                  <input type="text" value={pkg.col1Title} onChange={(e) => handlePackageChange(pIndex, 'col1Title', e.target.value)} className="flex-1 border rounded p-1 text-xs text-center" placeholder="Kolom 1 (5 HOURS)" />
-                  <input type="text" value={pkg.col2Title} onChange={(e) => handlePackageChange(pIndex, 'col2Title', e.target.value)} className="flex-1 border rounded p-1 text-xs text-center" placeholder="Kolom 2 (3 HOURS)" />
+                
+                {/* Fixed layout for hours input columns */}
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[10px] text-gray-400 mb-0.5">Jam Kolom 1</label>
+                    <input type="text" value={pkg.col1Title} onChange={(e) => handlePackageChange(pIndex, 'col1Title', e.target.value)} className="w-full border rounded p-1.5 text-xs text-center bg-white" placeholder="5 HOURS" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-gray-400 mb-0.5">Jam Kolom 2</label>
+                    <input type="text" value={pkg.col2Title} onChange={(e) => handlePackageChange(pIndex, 'col2Title', e.target.value)} className="w-full border rounded p-1.5 text-xs text-center bg-white" placeholder="3 HOURS" />
+                  </div>
                 </div>
                 
                 {pkg.rows.map((row, rIndex) => (
-                  <div key={row.id} className="flex gap-1 items-center border-t pt-2 mt-2 border-gray-200">
-                    <div className="flex-1 space-y-1">
+                  <div key={row.id} className="grid grid-cols-2 gap-2 border-t pt-2 mt-2 border-gray-200">
+                    <div className="space-y-1 bg-white p-2 rounded border border-gray-100">
                       <input type="text" value={row.label1} onChange={(e) => handlePackageChange(pIndex, 'label1', e.target.value, rIndex)} className="w-full border rounded p-1 text-xs text-center" placeholder="1 BOTTLE" />
                       <input type="text" value={row.price1} onChange={(e) => handlePackageChange(pIndex, 'price1', e.target.value, rIndex)} className="w-full border rounded p-1 text-xs text-center font-bold text-yellow-600" placeholder="3400K" />
                     </div>
-                    <div className="text-gray-400 text-xs">|</div>
-                    <div className="flex-1 space-y-1">
+                    <div className="space-y-1 bg-white p-2 rounded border border-gray-100">
                       <input type="text" value={row.label2} onChange={(e) => handlePackageChange(pIndex, 'label2', e.target.value, rIndex)} className="w-full border rounded p-1 text-xs text-center" placeholder="1 BOTTLE" />
                       <input type="text" value={row.price2} onChange={(e) => handlePackageChange(pIndex, 'price2', e.target.value, rIndex)} className="w-full border rounded p-1 text-xs text-center font-bold text-yellow-600" placeholder="2900K" />
                     </div>
@@ -305,10 +312,10 @@ export default function App() {
             <div className="bg-gray-50 p-3 rounded border shadow-sm space-y-2 mt-2">
               <input type="text" value={project.additionalTitle} onChange={(e) => handleChange('additionalTitle', e.target.value)} className="w-full border rounded p-2 text-sm font-bold" placeholder="Judul Additional" />
               {project.additionalRows.map((row, rIndex) => (
-                <div key={row.id} className="flex gap-1 border-t pt-2">
-                  <input type="text" value={row.label} onChange={(e) => handleAdditionalChange(rIndex, 'label', e.target.value)} className="w-1/4 border rounded p-1 text-xs" />
-                  <input type="text" value={row.item1} onChange={(e) => handleAdditionalChange(rIndex, 'item1', e.target.value)} className="w-3/8 border rounded p-1 text-xs" />
-                  <input type="text" value={row.item2} onChange={(e) => handleAdditionalChange(rIndex, 'item2', e.target.value)} className="w-3/8 border rounded p-1 text-xs" />
+                <div key={row.id} className="grid grid-cols-3 gap-1 border-t pt-2">
+                  <input type="text" value={row.label} onChange={(e) => handleAdditionalChange(rIndex, 'label', e.target.value)} className="border rounded p-1 text-xs text-center" />
+                  <input type="text" value={row.item1} onChange={(e) => handleAdditionalChange(rIndex, 'item1', e.target.value)} className="border rounded p-1 text-xs text-center" />
+                  <input type="text" value={row.item2} onChange={(e) => handleAdditionalChange(rIndex, 'item2', e.target.value)} className="border rounded p-1 text-xs text-center" />
                 </div>
               ))}
             </div>
@@ -317,10 +324,10 @@ export default function App() {
       </div>
 
       {/* PREVIEW & EXPORT AREA */}
-      <div className="flex-1 flex flex-col bg-gray-200">
+      <div className="flex-1 flex flex-col bg-gray-200 overflow-hidden">
         
         {/* Topbar Actions */}
-        <div className="bg-white p-3 border-b flex justify-between items-center print:hidden shadow-sm z-10">
+        <div className="bg-white p-3 border-b flex justify-between items-center print:hidden shadow-sm z-10 shrink-0">
           <span className="text-gray-600 text-sm hidden md:inline">Gunakan editor di sebelah kiri untuk mengubah tampilan.</span>
           <div className="flex gap-3 ml-auto">
             <button onClick={exportPNG} disabled={isExporting} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded shadow-sm text-sm font-medium transition flex items-center gap-2">
@@ -339,7 +346,7 @@ export default function App() {
           <div 
             ref={previewRef}
             id="poster-preview"
-            className="relative bg-[#151922] w-full max-w-[600px] border-[8px] border-[#c29b57] p-6 shadow-2xl flex flex-col"
+            className="relative bg-[#151922] w-full max-w-[600px] border-[8px] border-[#c29b57] p-6 shadow-2xl flex flex-col shrink-0"
             style={{ 
               minHeight: '850px',
               fontFamily: "'Montserrat', sans-serif" 
