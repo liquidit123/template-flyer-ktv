@@ -180,10 +180,18 @@ export default function App() {
     
     setIsExporting(true);
     try {
+      // Fix: Scroll paksa ke atas dan konfigurasi ulang agar render tidak gagal
+      window.scrollTo(0, 0);
+      
       const canvas = await window.html2canvas(previewRef.current, {
-        scale: 2, // High resolution
+        scale: 2, // Resolusi tinggi
         useCORS: true,
-        backgroundColor: '#151922'
+        allowTaint: true, // Membantu merender gambar lokal
+        backgroundColor: '#151922',
+        scrollX: 0,
+        scrollY: 0,
+        windowWidth: document.documentElement.offsetWidth,
+        windowHeight: document.documentElement.offsetHeight
       });
       
       const link = document.createElement('a');
@@ -192,7 +200,7 @@ export default function App() {
       link.click();
     } catch (err) {
       console.error(err);
-      alert('Gagal mengekspor gambar.');
+      alert('Gagal mengekspor gambar. Pastikan file gambar/logo tidak terlalu besar.');
     }
     setIsExporting(false);
   };
@@ -487,6 +495,16 @@ export default function App() {
         @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&display=swap');
         
         @media print {
+          @page {
+            size: A4 portrait;
+            margin: 0;
+          }
+          body, html {
+            background-color: #151922 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            width: 100% !important;
+          }
           body * {
             visibility: hidden;
           }
@@ -494,18 +512,20 @@ export default function App() {
             visibility: visible;
           }
           #poster-preview {
-            position: absolute;
-            left: 0;
-            top: 0;
-            margin: 0;
-            padding: 20px;
-            width: 100%;
-            height: auto;
+            position: absolute !important;
+            left: 0 !important;
+            top: 0 !important;
+            right: 0 !important;
+            margin: 0 auto !important; /* Membuat posisi presisi di tengah horisontal */
+            width: 210mm !important; /* Fix selebar kertas A4 */
+            min-height: 297mm !important; /* Fix setinggi minimal kertas A4 */
+            padding: 10mm 15mm !important;
+            background-color: #151922 !important;
+            -webkit-print-color-adjust: exact !important; 
+            print-color-adjust: exact !important;
             border: none !important;
             box-shadow: none !important;
-            background-color: #151922 !important;
-            -webkit-print-color-adjust: exact; 
-            print-color-adjust: exact;
+            box-sizing: border-box !important;
           }
         }
       `}</style>
