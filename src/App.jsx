@@ -51,16 +51,17 @@ export default function App() {
       setSavedProjects(JSON.parse(loaded));
     }
     
-    // Inject html2canvas-pro for PNG export.
-    // NOTE: the original html2canvas (1.4.1) cannot parse the oklch()/oklab()
-    // color functions that Tailwind CSS v4 generates for its default palette
-    // (bg-gray-100, text-yellow-500, etc). It throws
-    // `Error: Attempting to parse an unsupported color function "oklch"` and
-    // the export silently fails. html2canvas-pro is a drop-in fork that adds
-    // support for those color functions, exposed under the same
-    // `window.html2canvas` global.
+    // Inject html-to-image for PNG export.
+    // NOTE: html2canvas / html2canvas-pro re-implement CSS layout themselves
+    // in JS, and that engine does not properly support CSS Grid (the price
+    // tables here use `grid grid-cols-*`) — columns collapse, borders vanish,
+    // and the poster renders as one long broken column. html-to-image avoids
+    // this whole category of bug: it serializes the DOM into an SVG
+    // <foreignObject> and lets the real browser engine render it (same as
+    // what you see on screen), so Grid, Flexbox, borders and oklch() colors
+    // all just work. Exposed as the `window.htmlToImage` global.
     const script = document.createElement('script');
-    script.src = 'https://cdn.jsdelivr.net/npm/html2canvas-pro/dist/html2canvas-pro.min.js';
+    script.src = 'https://cdn.jsdelivr.net/npm/html-to-image/dist/html-to-image.js';
     document.head.appendChild(script);
   }, []);
 
@@ -180,30 +181,24 @@ export default function App() {
   };
 
   const exportPNG = async () => {
-    if (!window.html2canvas) {
+    if (!window.htmlToImage) {
       alert('Library export sedang dimuat, coba lagi dalam beberapa detik.');
       return;
     }
-    
+
     setIsExporting(true);
     try {
-      // Fix: Scroll paksa ke atas dan konfigurasi ulang agar render tidak gagal
       window.scrollTo(0, 0);
-      
-      const canvas = await window.html2canvas(previewRef.current, {
-        scale: 2, // Resolusi tinggi
-        useCORS: true,
-        allowTaint: true, // Membantu merender gambar lokal
+
+      const dataUrl = await window.htmlToImage.toPng(previewRef.current, {
+        pixelRatio: 2, // Resolusi tinggi
         backgroundColor: '#151922',
-        scrollX: 0,
-        scrollY: 0,
-        windowWidth: document.documentElement.offsetWidth,
-        windowHeight: document.documentElement.offsetHeight
+        cacheBust: true, // Hindari gambar dari cache browser yang gagal ter-embed
       });
-      
+
       const link = document.createElement('a');
       link.download = `${project.projectName}.png`;
-      link.href = canvas.toDataURL('image/png');
+      link.href = dataUrl;
       link.click();
     } catch (err) {
       console.error(err);
