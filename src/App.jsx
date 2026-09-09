@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 
+// Default template structure based on the image
 const defaultTemplate = {
   id: Date.now().toString(),
   projectName: 'Paket Lokal 1',
-  logoImage: null,
+  logoImage: null, // Base64 image for logo
   mainTitle: 'LOCAL PACKAGE',
-  image: null,
+  image: null, // Base64 image
   liquorList: 'BLACK BULL • GILBEY S GIN • GILBEY S VODKA • GILBEY S WHISKEY\nVIBE TEQUILLA • VIBE VODKA • VIBE BLACK TEA • VIBE LYCHEE\nVODKA BLUE • SEAGRAM VODKA • SILVER GIN • VODKA 9 • OMRACH\nNUSA CANA SPICED RUM • NUSA CANA RUM • BLANCO • SMIRNOFF VODKA\nGORDON PINK • MANTA DARK RUM • MANTA WHITE RUM • MANTA SPICED RUM',
   packages: [
     {
@@ -41,24 +42,27 @@ export default function App() {
   const [project, setProject] = useState(defaultTemplate);
   const [savedProjects, setSavedProjects] = useState([]);
   const [isExporting, setIsExporting] = useState(false);
-  const [activeTab, setActiveTab] = useState('editor');
+  const [activeTab, setActiveTab] = useState('editor'); // 'editor' or 'preview' for mobile toggle
   const previewRef = useRef(null);
 
   useEffect(() => {
     const loaded = localStorage.getItem('ktvMenuProjects');
     if (loaded) {
-      try {
-        setSavedProjects(JSON.parse(loaded));
-      } catch (e) {
-        console.error(e);
-      }
+      setSavedProjects(JSON.parse(loaded));
     }
     
-    if (!window.html2canvas) {
-      const script = document.createElement('script');
-      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
-      document.head.appendChild(script);
-    }
+    // Inject html-to-image for PNG export.
+    // NOTE: html2canvas / html2canvas-pro re-implement CSS layout themselves
+    // in JS, and that engine does not properly support CSS Grid (the price
+    // tables here use `grid grid-cols-*`) — columns collapse, borders vanish,
+    // and the poster renders as one long broken column. html-to-image avoids
+    // this whole category of bug: it serializes the DOM into an SVG
+    // <foreignObject> and lets the real browser engine render it (same as
+    // what you see on screen), so Grid, Flexbox, borders and oklch() colors
+    // all just work. Exposed as the `window.htmlToImage` global.
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/html-to-image/dist/html-to-image.js';
+    document.head.appendChild(script);
   }, []);
 
   const handleChange = (field, value) => {
@@ -94,7 +98,7 @@ export default function App() {
       const img = new Image();
       img.onload = () => {
         const canvas = document.createElement('canvas');
-        const MAX_WIDTH = 400; 
+        const MAX_WIDTH = 400; // Resize logo to prevent localstorage quota errors
         let width = img.width;
         let height = img.height;
         
@@ -125,7 +129,7 @@ export default function App() {
       const img = new Image();
       img.onload = () => {
         const canvas = document.createElement('canvas');
-        const MAX_WIDTH = 800;
+        const MAX_WIDTH = 800; // Resize to prevent localstorage quota errors
         let width = img.width;
         let height = img.height;
         
@@ -160,11 +164,8 @@ export default function App() {
     }
     
     setSavedProjects(updatedProjects);
-    try {
-      localStorage.setItem('ktvMenuProjects', JSON.stringify(updatedProjects));
-    } catch (err) {
-      console.error(err);
-    }
+    localStorage.setItem('ktvMenuProjects', JSON.stringify(updatedProjects));
+    alert('Proyek berhasil disimpan!');
     setProject(newProject);
   };
 
@@ -176,41 +177,34 @@ export default function App() {
   };
 
   const newProject = () => {
-    setProject({ ...defaultTemplate, id: Date.now().toString(), projectName: 'Proyek Baru', image: null, logoImage: null });
+    setProject({ ...defaultTemplate, id: Date.now().toString(), projectName: 'Proyek Baru', image: null });
   };
 
   const exportPNG = async () => {
-    if (!window.html2canvas) {
+    if (!window.htmlToImage) {
+      alert('Library export sedang dimuat, coba lagi dalam beberapa detik.');
       return;
     }
-    
+
     setIsExporting(true);
     try {
-      const originalScrollY = window.scrollY;
-      const originalScrollX = window.scrollX;
       window.scrollTo(0, 0);
 
-      const el = previewRef.current;
-      const canvas = await window.html2canvas(el, {
-        scale: 2,
-        useCORS: true,
-        allowTaint: true,
+      const dataUrl = await window.htmlToImage.toPng(previewRef.current, {
+        pixelRatio: 2, // Resolusi tinggi
         backgroundColor: '#151922',
-        windowWidth: document.documentElement.scrollWidth,
-        windowHeight: document.documentElement.scrollHeight
+        cacheBust: true, // Hindari gambar dari cache browser yang gagal ter-embed
       });
-      
-      window.scrollTo(originalScrollX, originalScrollY);
 
       const link = document.createElement('a');
       link.download = `${project.projectName}.png`;
-      link.href = canvas.toDataURL('image/png');
+      link.href = dataUrl;
       link.click();
     } catch (err) {
       console.error(err);
-    } finally {
-      setIsExporting(false);
+      alert(`Gagal mengekspor gambar: ${err.message || err}\n\nPastikan file gambar/logo tidak terlalu besar dan koneksi internet stabil (library export dimuat dari CDN).`);
     }
+    setIsExporting(false);
   };
 
   const exportPDF = () => {
@@ -220,6 +214,7 @@ export default function App() {
   return (
     <div className="flex flex-col md:flex-row h-screen bg-gray-100 text-gray-800 font-sans overflow-hidden">
       
+      {/* MOBILE TAB TOGGLE HEADER */}
       <div className="md:hidden flex bg-gray-900 text-white shrink-0 shadow-md z-30">
         <button 
           onClick={() => setActiveTab('editor')} 
@@ -235,6 +230,7 @@ export default function App() {
         </button>
       </div>
 
+      {/* SIDEBAR EDITOR */}
       <div className={`w-full md:w-[380px] lg:w-[420px] bg-white border-r border-gray-200 flex flex-col h-full overflow-y-auto print:hidden shadow-lg z-10 shrink-0 ${activeTab === 'preview' ? 'hidden md:flex' : 'flex'}`}>
         <div className="p-4 bg-gray-900 text-white sticky top-0 z-20 shadow-md">
           <h1 className="text-xl font-bold text-yellow-500 mb-2">Menu Editor</h1>
@@ -260,6 +256,7 @@ export default function App() {
         </div>
 
         <div className="p-4 space-y-6 pb-20 md:pb-6">
+          {/* General Settings */}
           <section className="space-y-3">
             <h2 className="font-semibold text-gray-700 border-b pb-1">Pengaturan Umum</h2>
             <div>
@@ -269,9 +266,7 @@ export default function App() {
             <div>
               <label className="block text-xs font-medium text-gray-500">Gambar Logo (Kiri Atas)</label>
               <input type="file" accept="image/*" onChange={handleLogoUpload} className="w-full border rounded p-1 text-sm mt-1" />
-              {project.logoImage && (
-                <button onClick={() => handleChange('logoImage', null)} className="text-xs text-red-500 mt-1 hover:underline block">Hapus Logo</button>
-              )}
+              <button onClick={() => handleChange('logoImage', null)} className="text-xs text-red-500 mt-1 hover:underline">Hapus Logo</button>
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-500">Judul Utama</label>
@@ -280,9 +275,7 @@ export default function App() {
             <div>
               <label className="block text-xs font-medium text-gray-500">Gambar Botol (Tengah)</label>
               <input type="file" accept="image/*" onChange={handleImageUpload} className="w-full border rounded p-1 text-sm mt-1" />
-              {project.image && (
-                <button onClick={() => handleChange('image', null)} className="text-xs text-red-500 mt-1 hover:underline block">Hapus Gambar</button>
-              )}
+              <button onClick={() => handleChange('image', null)} className="text-xs text-red-500 mt-1 hover:underline">Hapus Gambar</button>
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-500">Daftar Minuman (Gunakan Enter)</label>
@@ -290,32 +283,34 @@ export default function App() {
             </div>
           </section>
 
+          {/* Packages Settings */}
           <section className="space-y-4">
             <h2 className="font-semibold text-gray-700 border-b pb-1">Tabel Harga Paket</h2>
             {project.packages.map((pkg, pIndex) => (
-              <div key={pkg.id} className="bg-gray-50 p-3 rounded border shadow-sm space-y-3">
-                <input type="text" value={pkg.title} onChange={(e) => handlePackageChange(pIndex, 'title', e.target.value)} className="w-full border rounded p-2 font-bold text-sm bg-white" placeholder="Judul Paket" />
+              <div key={pkg.id} className="bg-gray-50 p-3 rounded border shadow-sm space-y-2">
+                <input type="text" value={pkg.title} onChange={(e) => handlePackageChange(pIndex, 'title', e.target.value)} className="w-full border rounded p-2 font-bold text-sm bg-white" placeholder="Judul Paket (Misal: 4 LADIES)" />
                 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full">
-                  <div className="flex flex-col min-w-0">
-                    <label className="block text-[10px] text-gray-500 mb-1 font-semibold truncate">Jam Kolom 1</label>
-                    <input type="text" value={pkg.col1Title} onChange={(e) => handlePackageChange(pIndex, 'col1Title', e.target.value)} className="w-full border rounded p-2 text-xs text-center bg-white font-medium box-border" />
+                {/* Fixed layout for hours input columns with proper grid constraints */}
+                <div className="grid grid-cols-2 gap-2 w-full">
+                  <div className="min-w-0">
+                    <label className="block text-[10px] text-gray-400 mb-0.5 truncate">Jam Kolom 1</label>
+                    <input type="text" value={pkg.col1Title} onChange={(e) => handlePackageChange(pIndex, 'col1Title', e.target.value)} className="w-full border rounded p-1.5 text-xs text-center bg-white" placeholder="5 HOURS" />
                   </div>
-                  <div className="flex flex-col min-w-0">
-                    <label className="block text-[10px] text-gray-500 mb-1 font-semibold truncate">Jam Kolom 2</label>
-                    <input type="text" value={pkg.col2Title} onChange={(e) => handlePackageChange(pIndex, 'col2Title', e.target.value)} className="w-full border rounded p-2 text-xs text-center bg-white font-medium box-border" />
+                  <div className="min-w-0">
+                    <label className="block text-[10px] text-gray-400 mb-0.5 truncate">Jam Kolom 2</label>
+                    <input type="text" value={pkg.col2Title} onChange={(e) => handlePackageChange(pIndex, 'col2Title', e.target.value)} className="w-full border rounded p-1.5 text-xs text-center bg-white" placeholder="3 HOURS" />
                   </div>
                 </div>
                 
                 {pkg.rows.map((row, rIndex) => (
-                  <div key={row.id} className="grid grid-cols-2 gap-2 border-t pt-3 mt-2 border-gray-200">
-                    <div className="space-y-1.5 bg-white p-2 rounded border border-gray-100 min-w-0">
-                      <input type="text" value={row.label1} onChange={(e) => handlePackageChange(pIndex, 'label1', e.target.value, rIndex)} className="w-full border rounded p-1 text-xs text-center box-border" />
-                      <input type="text" value={row.price1} onChange={(e) => handlePackageChange(pIndex, 'price1', e.target.value, rIndex)} className="w-full border rounded p-1 text-xs text-center font-bold text-yellow-600 box-border" />
+                  <div key={row.id} className="grid grid-cols-2 gap-2 border-t pt-2 mt-2 border-gray-200">
+                    <div className="space-y-1 bg-white p-2 rounded border border-gray-100 min-w-0">
+                      <input type="text" value={row.label1} onChange={(e) => handlePackageChange(pIndex, 'label1', e.target.value, rIndex)} className="w-full border rounded p-1 text-xs text-center" placeholder="1 BOTTLE" />
+                      <input type="text" value={row.price1} onChange={(e) => handlePackageChange(pIndex, 'price1', e.target.value, rIndex)} className="w-full border rounded p-1 text-xs text-center font-bold text-yellow-600" placeholder="3400K" />
                     </div>
-                    <div className="space-y-1.5 bg-white p-2 rounded border border-gray-100 min-w-0">
-                      <input type="text" value={row.label2} onChange={(e) => handlePackageChange(pIndex, 'label2', e.target.value, rIndex)} className="w-full border rounded p-1 text-xs text-center box-border" />
-                      <input type="text" value={row.price2} onChange={(e) => handlePackageChange(pIndex, 'price2', e.target.value, rIndex)} className="w-full border rounded p-1 text-xs text-center font-bold text-yellow-600 box-border" />
+                    <div className="space-y-1 bg-white p-2 rounded border border-gray-100 min-w-0">
+                      <input type="text" value={row.label2} onChange={(e) => handlePackageChange(pIndex, 'label2', e.target.value, rIndex)} className="w-full border rounded p-1 text-xs text-center" placeholder="1 BOTTLE" />
+                      <input type="text" value={row.price2} onChange={(e) => handlePackageChange(pIndex, 'price2', e.target.value, rIndex)} className="w-full border rounded p-1 text-xs text-center font-bold text-yellow-600" placeholder="2900K" />
                     </div>
                   </div>
                 ))}
@@ -323,6 +318,7 @@ export default function App() {
             ))}
           </section>
 
+          {/* Include & Additional Settings */}
           <section className="space-y-3 pb-8">
             <h2 className="font-semibold text-gray-700 border-b pb-1">Tambahan & Keterangan</h2>
             <div>
@@ -331,7 +327,7 @@ export default function App() {
             </div>
             
             <div className="bg-gray-50 p-3 rounded border shadow-sm space-y-2 mt-2">
-              <input type="text" value={project.additionalTitle} onChange={(e) => handleChange('additionalTitle', e.target.value)} className="w-full border rounded p-2 text-sm font-bold" />
+              <input type="text" value={project.additionalTitle} onChange={(e) => handleChange('additionalTitle', e.target.value)} className="w-full border rounded p-2 text-sm font-bold" placeholder="Judul Additional" />
               {project.additionalRows.map((row, rIndex) => (
                 <div key={row.id} className="grid grid-cols-3 gap-1 border-t pt-2">
                   <input type="text" value={row.label} onChange={(e) => handleAdditionalChange(rIndex, 'label', e.target.value)} className="border rounded p-1 text-xs text-center min-w-0" />
@@ -344,7 +340,10 @@ export default function App() {
         </div>
       </div>
 
-      <div className={`flex-1 flex flex-col bg-gray-200 overflow-hidden ${activeTab === 'preview' ? 'flex' : 'hidden md:flex'}`}>
+      {/* PREVIEW & EXPORT AREA */}
+      <div className={`flex-1 flex-col bg-gray-200 overflow-hidden ${activeTab === 'preview' ? 'flex' : 'hidden md:flex'}`}>
+        
+        {/* Topbar Actions */}
         <div className="bg-white p-3 border-b flex justify-between items-center print:hidden shadow-sm z-10 shrink-0">
           <span className="text-gray-600 text-sm hidden md:inline">Hasil poster siap diunduh atau disimpan.</span>
           <div className="flex gap-2 ml-auto w-full md:w-auto justify-end">
@@ -357,7 +356,10 @@ export default function App() {
           </div>
         </div>
 
+        {/* Canvas Preview Area */}
         <div className="flex-1 overflow-auto p-4 md:p-8 flex justify-center print:p-0 print:overflow-visible items-start">
+          
+          {/* THE POSTER */}
           <div 
             ref={previewRef}
             id="poster-preview"
@@ -367,6 +369,7 @@ export default function App() {
               fontFamily: "'Montserrat', sans-serif" 
             }}
           >
+            {/* Background Accent Lines (Decorative) */}
             <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none opacity-20">
               <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
                 <path d="M-50 150 Q 200 50, 600 300" stroke="#c29b57" strokeWidth="2" fill="none" />
@@ -375,37 +378,53 @@ export default function App() {
               </svg>
             </div>
 
-            <div className="flex justify-between items-center mb-6 z-10 relative min-h-[50px]">
+            {/* Header */}
+            <div className="flex justify-between items-center mb-6 z-10 relative">
+              {/* Logo Box */}
               <div className="flex flex-col items-center justify-center w-[150px] h-[50px]">
                  {project.logoImage ? (
                    <img src={project.logoImage} alt="Logo" className="max-w-full max-h-full object-contain" />
-                 ) : null}
+                 ) : (
+                   <div className="text-white text-xs text-center border border-dashed border-gray-500 p-2 opacity-50 print:hidden">
+                     Upload Logo
+                   </div>
+                 )}
               </div>
               
+              {/* Main Title */}
               <h1 className="text-[#c29b57] text-3xl font-bold tracking-widest uppercase text-right">
                 {project.mainTitle}
               </h1>
             </div>
 
-            <div className="flex-1 min-h-[150px] flex items-center justify-center mb-4 z-10 relative">
+            {/* Image Area */}
+            <div className="flex-1 min-h-[200px] flex items-center justify-center mb-4 z-10 relative group">
               {project.image ? (
                 <img src={project.image} alt="Products" className="max-h-[250px] object-contain drop-shadow-2xl" />
-              ) : null}
+              ) : (
+                <div className="w-full h-48 border-2 border-dashed border-gray-600 flex items-center justify-center text-gray-500 text-sm print:hidden">
+                  Area Gambar Botol (Upload di Menu)
+                </div>
+              )}
             </div>
 
+            {/* Liquors List */}
             <div className="text-center z-10 relative mb-6 px-4">
               <p className="text-[#c29b57] text-[10px] sm:text-xs font-semibold leading-tight whitespace-pre-wrap uppercase tracking-wide">
                 {project.liquorList}
               </p>
             </div>
 
+            {/* Package Tables - Fixed alignment & layout matching reference */}
             <div className="space-y-4 z-10 relative w-[95%] mx-auto">
-              {project.packages.map((pkg) => (
+              {project.packages.map((pkg, idx) => (
                 <div key={pkg.id} className="w-full border-2 border-[#c29b57] bg-[#151922]">
+                  {/* Table Title */}
                   <div className="w-full bg-[#151922] border-b-2 border-[#c29b57] text-center py-1.5">
                     <h2 className="text-[#c29b57] text-xl font-bold uppercase tracking-wider">{pkg.title}</h2>
                   </div>
                   
+                  {/* Table Header Columns */}
                   <div className="grid grid-cols-2 w-full border-b-2 border-[#c29b57] bg-[#151922]">
                     <div className="text-center py-1.5 border-r-2 border-[#c29b57]">
                       <span className="text-[#c29b57] font-bold text-base">{pkg.col1Title}</span>
@@ -415,17 +434,22 @@ export default function App() {
                     </div>
                   </div>
 
+                  {/* Table Rows */}
                   {pkg.rows.map((row, rIndex) => (
                     <div key={row.id} className={`grid grid-cols-4 w-full ${rIndex > 0 ? 'border-t-2 border-[#c29b57]' : ''}`}>
+                      {/* Col 1 Label */}
                       <div className="bg-[#151922] text-center py-2 border-r-2 border-[#c29b57] flex items-center justify-center px-1">
                         <span className="text-[#c29b57] font-semibold text-xs tracking-tight">{row.label1}</span>
                       </div>
+                      {/* Col 1 Price */}
                       <div className="bg-[#151922] text-center py-2 border-r-2 border-[#c29b57] flex items-center justify-center px-1">
                         <span className="text-white font-bold text-sm tracking-wide">{row.price1}</span>
                       </div>
+                      {/* Col 2 Label */}
                       <div className="bg-[#151922] text-center py-2 border-r-2 border-[#c29b57] flex items-center justify-center px-1">
                         <span className="text-[#c29b57] font-semibold text-xs tracking-tight">{row.label2}</span>
                       </div>
+                      {/* Col 2 Price */}
                       <div className="bg-[#151922] text-center py-2 flex items-center justify-center px-1">
                         <span className="text-white font-bold text-sm tracking-wide">{row.price2}</span>
                       </div>
@@ -435,12 +459,14 @@ export default function App() {
               ))}
             </div>
 
+            {/* Includes Section */}
             <div className="text-center z-10 relative mt-5 mb-4">
               <p className="text-[#c29b57] text-sm font-bold whitespace-pre-wrap leading-tight">
                 {project.includes}
               </p>
             </div>
 
+            {/* Additional Table */}
             <div className="z-10 relative w-[85%] mx-auto pb-4">
               <div className="text-center mb-1">
                 <span className="text-[#c29b57] text-sm font-bold uppercase">{project.additionalTitle}</span>
@@ -466,38 +492,42 @@ export default function App() {
         </div>
       </div>
       
+      {/* Styles for Printing PDF */}
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&display=swap');
         
         @media print {
           @page {
-            size: auto;
-            margin: 0mm;
+            size: A4 portrait;
+            margin: 0;
           }
           body, html {
             background-color: #151922 !important;
             margin: 0 !important;
             padding: 0 !important;
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
+            width: 100% !important;
           }
           body * {
-            visibility: hidden !important;
+            visibility: hidden;
           }
           #poster-preview, #poster-preview * {
-            visibility: visible !important;
+            visibility: visible;
           }
           #poster-preview {
             position: absolute !important;
             left: 0 !important;
             top: 0 !important;
-            width: 100% !important;
-            max-width: none !important;
-            margin: 0 !important;
-            padding: 20px !important;
+            right: 0 !important;
+            margin: 0 auto !important; /* Membuat posisi presisi di tengah horisontal */
+            width: 210mm !important; /* Fix selebar kertas A4 */
+            min-height: 297mm !important; /* Fix setinggi minimal kertas A4 */
+            padding: 10mm 15mm !important;
             background-color: #151922 !important;
+            -webkit-print-color-adjust: exact !important; 
+            print-color-adjust: exact !important;
             border: none !important;
             box-shadow: none !important;
+            box-sizing: border-box !important;
           }
         }
       `}</style>
