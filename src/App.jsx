@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ref, set, get, child } from "firebase/database";
+import { ref, set, remove, onValue } from "firebase/database";
 import { db } from './firebase';
 
 // Default template structure based on the image
@@ -48,11 +48,23 @@ export default function App() {
   const previewRef = useRef(null);
 
   useEffect(() => {
-    const loaded = localStorage.getItem('ktvMenuProjects');
-    if (loaded) {
-      setSavedProjects(JSON.parse(loaded));
-    }
-    
+    // Dengarkan perubahan data proyek secara realtime dari Firebase.
+    // Setiap kali ada proyek baru/diubah/dihapus (dari device manapun),
+    // savedProjects otomatis ter-update di sini.
+    const projectsRef = ref(db, 'projects');
+    const unsubscribe = onValue(
+      projectsRef,
+      (snapshot) => {
+        const data = snapshot.val();
+        const list = data ? Object.values(data) : [];
+        setSavedProjects(list);
+      },
+      (err) => {
+        console.error(err);
+        alert('Gagal memuat data dari cloud: ' + err.message);
+      }
+    );
+
     // Inject html-to-image for PNG export.
     // NOTE: html2canvas / html2canvas-pro re-implement CSS layout themselves
     // in JS, and that engine does not properly support CSS Grid (the price
@@ -76,6 +88,8 @@ export default function App() {
     const jspdfScript = document.createElement('script');
     jspdfScript.src = 'https://cdn.jsdelivr.net/npm/jspdf/dist/jspdf.umd.min.js';
     document.head.appendChild(jspdfScript);
+
+    return () => unsubscribe();
   }, []);
 
   const handleChange = (field, value) => {
@@ -166,20 +180,18 @@ export default function App() {
 
   const saveProject = () => {
     const newProject = { ...project, id: project.id || Date.now().toString() };
-    const existingIndex = savedProjects.findIndex(p => p.id === newProject.id);
-    let updatedProjects;
-    
-    if (existingIndex >= 0) {
-      updatedProjects = [...savedProjects];
-      updatedProjects[existingIndex] = newProject;
-    } else {
-      updatedProjects = [...savedProjects, newProject];
-    }
-    
-    setSavedProjects(updatedProjects);
-    localStorage.setItem('ktvMenuProjects', JSON.stringify(updatedProjects));
-    alert('Proyek berhasil disimpan!');
-    setProject(newProject);
+    // Create (proyek baru) atau Update (proyek sudah ada) — sama-sama pakai
+    // set() dengan key = id proyek, jadi otomatis timpa data lama kalau id
+    // sudah ada. savedProjects akan ter-update sendiri lewat listener onValue.
+    set(ref(db, 'projects/' + newProject.id), newProject)
+      .then(() => {
+        alert('Proyek berhasil disimpan ke cloud!');
+        setProject(newProject);
+      })
+      .catch((err) => {
+        console.error(err);
+        alert('Gagal menyimpan ke cloud: ' + err.message);
+      });
   };
 
   const loadProject = (id) => {
@@ -187,6 +199,23 @@ export default function App() {
     if (target) {
       setProject(target);
     }
+  };
+
+  const deleteProject = (id) => {
+    if (!id) return;
+    if (!window.confirm('Yakin ingin menghapus proyek ini? Tindakan ini tidak bisa dibatalkan.')) return;
+
+    remove(ref(db, 'projects/' + id))
+      .then(() => {
+        // Kalau proyek yang lagi dibuka adalah yang dihapus, kembalikan ke default.
+        if (project.id === id) {
+          newProject();
+        }
+      })
+      .catch((err) => {
+        console.error(err);
+        alert('Gagal menghapus proyek: ' + err.message);
+      });
   };
 
   const newProject = () => {
@@ -291,17 +320,24 @@ export default function App() {
           </div>
           
           {savedProjects.length > 0 && (
-            <div className="mt-3">
+            <div className="mt-3 flex gap-2">
               <select 
-                className="w-full bg-gray-800 border border-gray-600 rounded p-1.5 text-sm text-white"
+                className="flex-1 min-w-0 bg-gray-800 border border-gray-600 rounded p-1.5 text-sm text-white"
                 onChange={(e) => loadProject(e.target.value)}
                 value={project.id}
               >
-                <option disabled value="">-- Muat Proyek Tersimpan --</option>
+                <option disabled value="">-- Muat Proyek Tersimpan (Cloud) --</option>
                 {savedProjects.map(p => (
                   <option key={p.id} value={p.id}>{p.projectName}</option>
                 ))}
               </select>
+              <button
+                onClick={() => deleteProject(project.id)}
+                title="Hapus proyek yang sedang dibuka"
+                className="shrink-0 bg-red-700 hover:bg-red-600 text-white px-2.5 py-1.5 rounded text-sm transition"
+              >
+                Hapus
+              </button>
             </div>
           )}
         </div>
