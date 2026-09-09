@@ -63,6 +63,17 @@ export default function App() {
     const script = document.createElement('script');
     script.src = 'https://cdn.jsdelivr.net/npm/html-to-image/dist/html-to-image.js';
     document.head.appendChild(script);
+
+    // Inject jsPDF for PDF export. We no longer use window.print() — the
+    // CSS "hide everything except #poster-preview" trick it relied on is
+    // notoriously inconsistent across browsers/print settings (e.g. Chrome's
+    // "Background graphics" checkbox) and was producing a blank page.
+    // Instead we reuse the same html-to-image render used for PNG and embed
+    // that image into a PDF, so the PDF is guaranteed to look identical to
+    // the PNG. Exposed as `window.jspdf.jsPDF`.
+    const jspdfScript = document.createElement('script');
+    jspdfScript.src = 'https://cdn.jsdelivr.net/npm/jspdf/dist/jspdf.umd.min.js';
+    document.head.appendChild(jspdfScript);
   }, []);
 
   const handleChange = (field, value) => {
@@ -188,14 +199,7 @@ export default function App() {
 
     setIsExporting(true);
     try {
-      window.scrollTo(0, 0);
-
-      const dataUrl = await window.htmlToImage.toPng(previewRef.current, {
-        pixelRatio: 2, // Resolusi tinggi
-        backgroundColor: '#151922',
-        cacheBust: true, // Hindari gambar dari cache browser yang gagal ter-embed
-      });
-
+      const dataUrl = await capturePosterAsPng();
       const link = document.createElement('a');
       link.download = `${project.projectName}.png`;
       link.href = dataUrl;
@@ -207,8 +211,53 @@ export default function App() {
     setIsExporting(false);
   };
 
-  const exportPDF = () => {
-    window.print();
+  // Shared render helper: rasterizes the poster preview to a PNG data URL.
+  // Used by both exportPNG and exportPDF so they always look identical.
+  const capturePosterAsPng = async () => {
+    window.scrollTo(0, 0);
+    return window.htmlToImage.toPng(previewRef.current, {
+      pixelRatio: 2, // Resolusi tinggi
+      backgroundColor: '#151922',
+      cacheBust: true, // Hindari gambar dari cache browser yang gagal ter-embed
+    });
+  };
+
+  const exportPDF = async () => {
+    if (!window.htmlToImage) {
+      alert('Library export sedang dimuat, coba lagi dalam beberapa detik.');
+      return;
+    }
+    if (!window.jspdf) {
+      alert('Library PDF sedang dimuat, coba lagi dalam beberapa detik.');
+      return;
+    }
+
+    setIsExporting(true);
+    try {
+      const dataUrl = await capturePosterAsPng();
+
+      // Baca dimensi asli hasil render, supaya ukuran halaman PDF
+      // persis mengikuti rasio poster (bukan dipaksa muat ke A4).
+      const { width, height } = await new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
+        img.onerror = () => reject(new Error('Gagal membaca ukuran gambar hasil render.'));
+        img.src = dataUrl;
+      });
+
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF({
+        orientation: height >= width ? 'portrait' : 'landscape',
+        unit: 'px',
+        format: [width, height],
+      });
+      pdf.addImage(dataUrl, 'PNG', 0, 0, width, height);
+      pdf.save(`${project.projectName}.pdf`);
+    } catch (err) {
+      console.error(err);
+      alert(`Gagal membuat PDF: ${err.message || err}`);
+    }
+    setIsExporting(false);
   };
 
   return (
@@ -265,7 +314,15 @@ export default function App() {
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-500">Gambar Logo (Kiri Atas)</label>
-              <input type="file" accept="image/*" onChange={handleLogoUpload} className="w-full border rounded p-1 text-sm mt-1" />
+              <div className="flex items-center gap-2 mt-1">
+                <label className="cursor-pointer bg-gray-100 hover:bg-gray-200 border rounded px-3 py-1.5 text-xs font-medium text-gray-700 transition shrink-0">
+                  {project.logoImage ? 'Ganti Logo' : 'Pilih Logo'}
+                  <input type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" />
+                </label>
+                {project.logoImage && (
+                  <img src={project.logoImage} alt="Preview logo" className="h-8 w-auto max-w-[100px] object-contain border rounded bg-gray-900 p-1" />
+                )}
+              </div>
               <button onClick={() => handleChange('logoImage', null)} className="text-xs text-red-500 mt-1 hover:underline">Hapus Logo</button>
             </div>
             <div>
@@ -274,7 +331,15 @@ export default function App() {
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-500">Gambar Botol (Tengah)</label>
-              <input type="file" accept="image/*" onChange={handleImageUpload} className="w-full border rounded p-1 text-sm mt-1" />
+              <div className="flex items-center gap-2 mt-1">
+                <label className="cursor-pointer bg-gray-100 hover:bg-gray-200 border rounded px-3 py-1.5 text-xs font-medium text-gray-700 transition shrink-0">
+                  {project.image ? 'Ganti Gambar' : 'Pilih Gambar'}
+                  <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
+                </label>
+                {project.image && (
+                  <img src={project.image} alt="Preview botol" className="h-8 w-auto max-w-[100px] object-contain border rounded bg-gray-900 p-1" />
+                )}
+              </div>
               <button onClick={() => handleChange('image', null)} className="text-xs text-red-500 mt-1 hover:underline">Hapus Gambar</button>
             </div>
             <div>
@@ -350,8 +415,8 @@ export default function App() {
             <button onClick={exportPNG} disabled={isExporting} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded shadow-sm text-xs md:text-sm font-medium transition flex items-center gap-2">
               {isExporting ? 'Memproses...' : 'Unduh PNG'}
             </button>
-            <button onClick={exportPDF} className="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded shadow-sm text-xs md:text-sm font-medium transition flex items-center gap-2">
-              Simpan PDF
+            <button onClick={exportPDF} disabled={isExporting} className="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded shadow-sm text-xs md:text-sm font-medium transition flex items-center gap-2">
+              {isExporting ? 'Memproses...' : 'Simpan PDF'}
             </button>
           </div>
         </div>
@@ -492,44 +557,9 @@ export default function App() {
         </div>
       </div>
       
-      {/* Styles for Printing PDF */}
+      {/* Font import (PDF/PNG export both render via html-to-image, not window.print()) */}
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&display=swap');
-        
-        @media print {
-          @page {
-            size: A4 portrait;
-            margin: 0;
-          }
-          body, html {
-            background-color: #151922 !important;
-            margin: 0 !important;
-            padding: 0 !important;
-            width: 100% !important;
-          }
-          body * {
-            visibility: hidden;
-          }
-          #poster-preview, #poster-preview * {
-            visibility: visible;
-          }
-          #poster-preview {
-            position: absolute !important;
-            left: 0 !important;
-            top: 0 !important;
-            right: 0 !important;
-            margin: 0 auto !important; /* Membuat posisi presisi di tengah horisontal */
-            width: 210mm !important; /* Fix selebar kertas A4 */
-            min-height: 297mm !important; /* Fix setinggi minimal kertas A4 */
-            padding: 10mm 15mm !important;
-            background-color: #151922 !important;
-            -webkit-print-color-adjust: exact !important; 
-            print-color-adjust: exact !important;
-            border: none !important;
-            box-shadow: none !important;
-            box-sizing: border-box !important;
-          }
-        }
       `}</style>
     </div>
   );
