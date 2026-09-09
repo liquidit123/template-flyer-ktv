@@ -48,31 +48,34 @@ export default function App() {
   const previewRef = useRef(null);
 
   useEffect(() => {
-    const loaded = localStorage.getItem('ktvMenuProjects');
-    if (loaded) {
-      setSavedProjects(JSON.parse(loaded));
-    }
+    // Memuat daftar proyek dari Firebase atau fallback ke localStorage jika diperlukan
+    const loadSavedList = async () => {
+      try {
+        const dbRef = ref(db);
+        const snapshot = await get(child(dbRef, 'saved_projects_list'));
+        if (snapshot.exists()) {
+          setSavedProjects(snapshot.val());
+        } else {
+          const loaded = localStorage.getItem('ktvMenuProjects');
+          if (loaded) {
+            setSavedProjects(JSON.parse(loaded));
+          }
+        }
+      } catch (e) {
+        const loaded = localStorage.getItem('ktvMenuProjects');
+        if (loaded) {
+          setSavedProjects(JSON.parse(loaded));
+        }
+      }
+    };
+    loadSavedList();
     
     // Inject html-to-image for PNG export.
-    // NOTE: html2canvas / html2canvas-pro re-implement CSS layout themselves
-    // in JS, and that engine does not properly support CSS Grid (the price
-    // tables here use `grid grid-cols-*`) — columns collapse, borders vanish,
-    // and the poster renders as one long broken column. html-to-image avoids
-    // this whole category of bug: it serializes the DOM into an SVG
-    // <foreignObject> and lets the real browser engine render it (same as
-    // what you see on screen), so Grid, Flexbox, borders and oklch() colors
-    // all just work. Exposed as the `window.htmlToImage` global.
     const script = document.createElement('script');
     script.src = 'https://cdn.jsdelivr.net/npm/html-to-image/dist/html-to-image.js';
     document.head.appendChild(script);
 
-    // Inject jsPDF for PDF export. We no longer use window.print() — the
-    // CSS "hide everything except #poster-preview" trick it relied on is
-    // notoriously inconsistent across browsers/print settings (e.g. Chrome's
-    // "Background graphics" checkbox) and was producing a blank page.
-    // Instead we reuse the same html-to-image render used for PNG and embed
-    // that image into a PDF, so the PDF is guaranteed to look identical to
-    // the PNG. Exposed as `window.jspdf.jsPDF`.
+    // Inject jsPDF for PDF export.
     const jspdfScript = document.createElement('script');
     jspdfScript.src = 'https://cdn.jsdelivr.net/npm/jspdf/dist/jspdf.umd.min.js';
     document.head.appendChild(jspdfScript);
@@ -111,7 +114,7 @@ export default function App() {
       const img = new Image();
       img.onload = () => {
         const canvas = document.createElement('canvas');
-        const MAX_WIDTH = 400; // Resize logo to prevent localstorage quota errors
+        const MAX_WIDTH = 400; // Resize logo to prevent quota errors
         let width = img.width;
         let height = img.height;
         
@@ -142,7 +145,7 @@ export default function App() {
       const img = new Image();
       img.onload = () => {
         const canvas = document.createElement('canvas');
-        const MAX_WIDTH = 800; // Resize to prevent localstorage quota errors
+        const MAX_WIDTH = 800; // Resize to prevent quota errors
         let width = img.width;
         let height = img.height;
         
@@ -164,34 +167,58 @@ export default function App() {
     reader.readAsDataURL(file);
   };
 
-  const saveProject = () => {
-    const newProject = { ...project, id: project.id || Date.now().toString() };
-    const existingIndex = savedProjects.findIndex(p => p.id === newProject.id);
-    let updatedProjects;
+  // --- CRUD FIREBASE INTEGRATION ---
+  const saveProject = async () => {
+    const currentId = project.id || Date.now().toString();
+    const updatedProject = { ...project, id: currentId };
     
-    if (existingIndex >= 0) {
-      updatedProjects = [...savedProjects];
-      updatedProjects[existingIndex] = newProject;
-    } else {
-      updatedProjects = [...savedProjects, newProject];
+    try {
+      // Simpan data spesifik proyek ke Firebase Realtime Database berdasarkan ID
+      await set(ref(db, `projects/${currentId}`), updatedProject);
+      
+      // Update indeks daftar proyek tersimpan
+      const existingIndex = savedProjects.findIndex(p => p.id === currentId);
+      let updatedList;
+      if (existingIndex >= 0) {
+        updatedList = [...savedProjects];
+        updatedList[existingIndex] = { id: currentId, projectName: updatedProject.projectName };
+      } else {
+        updatedList = [...savedProjects, { id: currentId, projectName: updatedProject.projectName }];
+      }
+      
+      await set(ref(db, 'saved_projects_list'), updatedList);
+      setSavedProjects(updatedList);
+      
+      // Backup lokal
+      localStorage.setItem('ktvMenuProjects', JSON.stringify(updatedList));
+      
+      alert('Proyek berhasil disimpan secara online ke Database!');
+      setProject(updatedProject);
+    } catch (err) {
+      console.error(err);
+      alert('Gagal menyimpan ke database: ' + err.message);
     }
-    
-    setSavedProjects(updatedProjects);
-    localStorage.setItem('ktvMenuProjects', JSON.stringify(updatedProjects));
-    alert('Proyek berhasil disimpan!');
-    setProject(newProject);
   };
 
-  const loadProject = (id) => {
-    const target = savedProjects.find(p => p.id === id);
-    if (target) {
-      setProject(target);
+  const loadProject = async (id) => {
+    try {
+      const dbRef = ref(db);
+      const snapshot = await get(child(dbRef, `projects/${id}`));
+      if (snapshot.exists()) {
+        setProject(snapshot.val());
+      } else {
+        alert('Data proyek tidak ditemukan di database.');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Gagal memuat proyek: ' + err.message);
     }
   };
 
   const newProject = () => {
     setProject({ ...defaultTemplate, id: Date.now().toString(), projectName: 'Proyek Baru', image: null });
   };
+  // --- END OF CRUD FIREBASE ---
 
   const exportPNG = async () => {
     if (!window.htmlToImage) {
@@ -214,7 +241,6 @@ export default function App() {
   };
 
   // Shared render helper: rasterizes the poster preview to a PNG data URL.
-  // Used by both exportPNG and exportPDF so they always look identical.
   const capturePosterAsPng = async () => {
     window.scrollTo(0, 0);
     return window.htmlToImage.toPng(previewRef.current, {
@@ -238,8 +264,6 @@ export default function App() {
     try {
       const dataUrl = await capturePosterAsPng();
 
-      // Baca dimensi asli hasil render, supaya ukuran halaman PDF
-      // persis mengikuti rasio poster (bukan dipaksa muat ke A4).
       const { width, height } = await new Promise((resolve, reject) => {
         const img = new Image();
         img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
@@ -357,7 +381,6 @@ export default function App() {
               <div key={pkg.id} className="bg-gray-50 p-3 rounded border shadow-sm space-y-2">
                 <input type="text" value={pkg.title} onChange={(e) => handlePackageChange(pIndex, 'title', e.target.value)} className="w-full border rounded p-2 font-bold text-sm bg-white" placeholder="Judul Paket (Misal: 4 LADIES)" />
                 
-                {/* Fixed layout for hours input columns with proper grid constraints */}
                 <div className="grid grid-cols-2 gap-2 w-full">
                   <div className="min-w-0">
                     <label className="block text-[10px] text-gray-400 mb-0.5 truncate">Jam Kolom 1</label>
@@ -559,7 +582,7 @@ export default function App() {
         </div>
       </div>
       
-      {/* Font import (PDF/PNG export both render via html-to-image, not window.print()) */}
+      {/* Font import */}
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&display=swap');
       `}</style>
