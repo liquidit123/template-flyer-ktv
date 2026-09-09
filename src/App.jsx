@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { ref, set, get, child } from "firebase/database";
+import { db } from './firebase';
 
 // Default template structure based on the image
 const defaultTemplate = {
