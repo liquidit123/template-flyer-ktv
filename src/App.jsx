@@ -51,9 +51,16 @@ export default function App() {
       setSavedProjects(JSON.parse(loaded));
     }
     
-    // Inject html2canvas for PNG export
+    // Inject html2canvas-pro for PNG export.
+    // NOTE: the original html2canvas (1.4.1) cannot parse the oklch()/oklab()
+    // color functions that Tailwind CSS v4 generates for its default palette
+    // (bg-gray-100, text-yellow-500, etc). It throws
+    // `Error: Attempting to parse an unsupported color function "oklch"` and
+    // the export silently fails. html2canvas-pro is a drop-in fork that adds
+    // support for those color functions, exposed under the same
+    // `window.html2canvas` global.
     const script = document.createElement('script');
-    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+    script.src = 'https://cdn.jsdelivr.net/npm/html2canvas-pro/dist/html2canvas-pro.min.js';
     document.head.appendChild(script);
   }, []);
 
@@ -200,7 +207,7 @@ export default function App() {
       link.click();
     } catch (err) {
       console.error(err);
-      alert('Gagal mengekspor gambar. Pastikan file gambar/logo tidak terlalu besar.');
+      alert(`Gagal mengekspor gambar: ${err.message || err}\n\nPastikan file gambar/logo tidak terlalu besar dan koneksi internet stabil (library export dimuat dari CDN).`);
     }
     setIsExporting(false);
   };
